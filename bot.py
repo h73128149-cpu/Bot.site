@@ -65,7 +65,7 @@ def request_phone_markup():
 
 # ==================== هندلرهای دستورات ====================
 
-# 1. دستور start (پشتیبانی کامل از مینی‌اپ و رفرال)
+# 1. دستور start (پشتیبانی کامل از استارت خالی، مینی‌اپ و رفرال)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.from_user.id
@@ -77,7 +77,7 @@ def send_welcome(message):
     
     command_args = message.text.split()
     
-    # 🔹 هندل مستقیم خرید از مینی‌اپ
+    # 🔹 هندل خرید مستقیم از طریق دکمه مینی‌اپ
     if len(command_args) > 1 and command_args[1].startswith("plan_"):
         plan_key = command_args[1]
         plans = {
@@ -123,6 +123,7 @@ def send_welcome(message):
         except Exception as e:
             print(f"Error sending log to admin: {e}")
 
+    # 🔹 پیام خوش‌آمدگویی و منوی اصلی (برای استارت عادی و خالی)
     welcome_text = (
         f"سلام {user_name} عزیز 👋\n\n"
         f"به ربات فروشگاهی **Hes_VPN** خوش آمدید!\n\n"
