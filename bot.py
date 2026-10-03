@@ -6,8 +6,7 @@ from threading import Thread
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 # ==================== تنظیمات اصلی ====================
-# توکن جدید جایگزین شد
-TOKEN = "8844989420:AAGvkDwt0QX1DnP1923vdBHPvuW8iidL55w"
+TOKEN = "8844989420:AAEcwPgtMFVBDYKKZoBMqGwilUNloClD5xk"
 BOT_USERNAME = "Hesamm_vpnbot"
 
 # اطلاعات حساب و مدیریت
@@ -157,7 +156,7 @@ def handle_contact(message):
         )
 
 
-# 3. دریافت داده‌های مینی‌اپ (پشتیبانی از ساختار قبلی)
+# 3. دریافت داده‌های مینی‌اپ
 @bot.message_handler(content_types=['web_app_data'])
 def handle_web_app_data(message):
     try:
