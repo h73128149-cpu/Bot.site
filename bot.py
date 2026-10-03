@@ -8,7 +8,6 @@ from telebot.types import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
-    ReplyKeyboardRemove,
 )
 
 # ==================== تنظیمات FLASK ====================
@@ -40,7 +39,7 @@ CARD_HOLDER = "عابدینی"
 SUPPORT_USERNAME = "Pv_HE33AM"
 ADMIN_CHAT_ID = 6889501272
 
-# ✅ لینک Raw عکس QR از گیت‌هاب خودت
+# ✅ لینک Raw عکس QR از گیت‌هاب
 QR_IMAGE_PATH = "https://raw.githubusercontent.com/h73128149-cpu/Bot.site/main/qr.png"
 
 bot = telebot.TeleBot(TOKEN)
@@ -235,7 +234,7 @@ def callback_query(call):
                     "🎉 **پرداخت شما با موفقیت تایید شد!**\n\n"
                     "🔹 **کانفیگ اختصاصی شما به صورت QR Code در پیام بعدی ارسال می‌شود.**\n"
                     "لطفاً چند لحظه صبر کنید...\n\n"
-                    "⚠️ **نکته مهم:** این کانفیگ مخصوص شماست و به هیچ عنوان آن را در اختیار دیگران قرار ندهید.\n"
+                    "⚠️️ **نکته مهم:** این کانفیگ مخصوص شماست و به هیچ عنوان آن را در اختیار دیگران قرار ندهید.\n"
                     "🌐 **برای اتصال، از برنامه‌های موجود در منوی ربات استفاده کنید.**\n\n"
                     "از خرید شما سپاسگزاریم ❤️"
                 )
@@ -397,5 +396,13 @@ def callback_query(call):
         bot.edit_message_text(welcome_text, chat_id, message_id, parse_mode="Markdown", reply_markup=main_menu_markup(user_id))
 
 
-print("🚀 Bot is running with GitHub QR Code...")
-bot.infinity_polling()
+print("🚀 Bot is running...")
+
+# پاک‌کردن پیام‌های قبلی برای جلوگیری از ارور
+try:
+    bot.skip_pending()
+except Exception:
+    pass
+
+# اجرا به همراه تنظیم تایم‌آوت جهت جلوگیری از قطعی
+bot.infinity_polling(timeout=10, long_polling_timeout=5)
