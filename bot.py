@@ -1,406 +1,287 @@
 import os
-from threading import Thread
+import json
 import telebot
 from flask import Flask
-from telebot.types import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    KeyboardButton,
-    ReplyKeyboardMarkup,
-)
+from threading import Thread
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
-# ==================== تنظیمات FLASK ====================
-app = Flask('')
+# ==================== تنظیمات اصلی ====================
+TOKEN = "8844989420:AAHZeWMt95dadVuzoqe-VApgBmBYZJbp7Nc"
+BOT_USERNAME = "Hesamm_vpnbot"
 
+# اطلاعات حساب و مدیریت
+CARD_NUMBER = "6219061837027282"
+CARD_HOLDER = "عابدی"
+SUPPORT_USERNAME = "Pv_HE33AM"
+ADMIN_CHAT_ID = 6889501272
 
-@app.route('/')
+# لینک تصویر QR Code یا لوگو در گیتهاب
+QR_IMAGE_PATH = "https://raw.githubusercontent.com/h73128149-cpu/Bot.site/main/qr.png"
+
+# لینک مینی‌اپ روی GitHub Pages
+WEB_APP_URL = "https://h73128149-cpu.github.io/mini-app/"
+
+# راه‌اندازی ربات
+bot = telebot.TeleBot(TOKEN)
+
+# دیتابیس متغیری ساده (در حافظه)
+users_set = set()
+referral_counts = {}
+user_phones = {}
+
+# ==================== سرویس نگهداری ربات (Flask Keep-Alive) ====================
+FLASK_APP = Flask('')
+
+@FLASK_APP.route('/')
 def home():
-    return "Bot is active!"
-
+    return "Bot & MiniApp are active!"
 
 def run():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
-
+    FLASK_APP.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 def keep_alive():
     t = Thread(target=run)
     t.start()
 
-
-keep_alive()
-
-# ==================== تنظیمات ربات ====================
-TOKEN = "8844989420:AAHZEwmt9SdadVuzoqe-vApgBmBYzJbp7Nc"
-BOT_USERNAME = "Hesamm_vpnbot"
-
-CARD_NUMBER = "6219861837027282"
-CARD_HOLDER = "عابدینی"
-SUPPORT_USERNAME = "Pv_HE33AM"
-ADMIN_CHAT_ID = 6889501272
-
-# لینک Raw عکس QR از گیت‌هاب
-QR_IMAGE_PATH = "https://raw.githubusercontent.com/h73128149-cpu/Bot.site/main/qr.png"
-
-bot = telebot.TeleBot(TOKEN)
-
-users_set = set()
-referral_counts = {}
-referred_users = set()
-user_phones = {}
-
-
+# ==================== کیبوردهای اصلی ====================
 def main_menu_markup(user_id):
     markup = InlineKeyboardMarkup(row_width=1)
+    
     markup.add(
-        InlineKeyboardButton("🛒 خرید اشتراک و انتخاب حجم", callback_data="buy_plan"),
+        InlineKeyboardButton("🚀 ورود به مینی‌اپ فروشگاه", web_app=WebAppInfo(url=WEB_APP_URL)),
+        InlineKeyboardButton("🛒 خرید سریع از ربات", callback_data="buy_plan"),
         InlineKeyboardButton("🎁 دریافت سرور رایگان (رفرال)", callback_data="referral_menu"),
         InlineKeyboardButton("📱 برنامه‌های اتصال", callback_data="apps_menu"),
-        InlineKeyboardButton("📞 پشتیبانی مستقیم", callback_data="support"),
+        InlineKeyboardButton("📞 پشتیبانی مستقیم", callback_data="support")
     )
     if user_id == ADMIN_CHAT_ID:
         markup.add(InlineKeyboardButton("⚙️ پنل مدیریت ربات", callback_data="admin_panel"))
     return markup
 
-
 def request_phone_markup():
     markup = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add(KeyboardButton("📱 اشتراک‌گذاری شماره تلفن من", request_contact=True))
+    markup.add(KeyboardButton("📱 اشتراک‌گذاری شماره تلفن", request_contact=True))
     return markup
 
+# ==================== هندلرهای دستورات ====================
 
+# 1. دستور start (آپدیت شده برای پشتیبانی کامل از مینی‌اپ جدید)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    user = message.from_user
-    user_name = user.first_name.replace("*", "").replace("_", "") if user.first_name else "کاربر"
-    username = f"@{user.username}" if user.username else "ندارد"
-    user_id = user.id
-
+    user_id = message.from_user.id
+    user_name = message.from_user.first_name.replace("*", "").replace("_", "") if message.from_user.first_name else "کاربر"
+    username = f"@{message.from_user.username}" if message.from_user.username else "ندارد"
+    
     is_new_user = user_id not in users_set
     users_set.add(user_id)
-
+    
     command_args = message.text.split()
+    
+    # 🔹 الف) هندل مستقیم خرید از مینی‌اپ جدید
+    if len(command_args) > 1 and command_args[1].startswith("plan_"):
+        plan_key = command_args[1]
+        plans = {
+            "plan_10gb": ("۱۰ گیگابایت", "۵۰,۰۰۰ تومان"),
+            "plan_20gb": ("۲۰ گیگابایت", "۱۰۰,۰۰۰ تومان"),
+            "plan_30gb": ("۳۰ گیگابایت", "۱۵۰,۰۰۰ تومان"),
+            "plan_unlimited": ("نامحدود (ماهانه)", "۳۵۰,۰۰۰ تومان")
+        }
+        plan_name, plan_price = plans.get(plan_key, ("نامشخص", "۰"))
+        
+        response_text = (
+            f"🛒 **سفارش جدید شما از مینی‌اپ**\n\n"
+            f"📌 **پلن انتخابی:** {plan_name}\n"
+            f"💳 **مبلغ قابل پرداخت:** {plan_price}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"💳 **شماره کارت جهت واریز:**\n"
+            f"`{CARD_NUMBER}`\n"
+            f"👤 **به نام:** {CARD_HOLDER}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📸 لطفاً پس از واریز، **تصویر فیش واریزی** خود را همین‌جا ارسال کنید."
+        )
+        bot.send_message(message.chat.id, response_text, parse_mode="Markdown")
+        return
+
+    # 🔹 ب) سیستم زیرمجموعه‌گیری (Referral)
     if len(command_args) > 1 and command_args[1].startswith("ref_"):
         try:
             referrer_id = int(command_args[1].replace("ref_", ""))
-            if referrer_id != user_id and user_id not in referred_users:
-                referred_users.add(user_id)
+            if referrer_id != user_id and is_new_user and referrer_id in users_set:
                 referral_counts[referrer_id] = referral_counts.get(referrer_id, 0) + 1
-                try:
-                    bot.send_message(
-                        referrer_id,
-                        f"🎉 یک نفر با لینک دعوت شما وارد ربات شد!\n"
-                        f"👥 تعداد زیرمجموعه‌های شما: {referral_counts[referrer_id]} نفر",
-                    )
-                except Exception:
-                    pass
+                bot.send_message(
+                    referrer_id,
+                    f"🎉 یک کاربر با لینک دعوت شما وارد ربات شد!\n👥 تعداد زیرمجموعه‌های شما: {referral_counts[referrer_id]}"
+                )
         except Exception as e:
             print(f"Referral error: {e}")
 
+    # 🔹 ج) گزارش ورود کاربر جدید به ادمین
     if is_new_user and user_id != ADMIN_CHAT_ID:
-        log_text = (
-            f"🚨 یک کاربر جدید ربات را استارت زد!\n\n"
-            f"👤 نام: {user_name}\n"
-            f"🆔 یوزرنیم: {username}\n"
-            f"🔢 آیدی عددی: {user_id}"
-        )
+        log_text = f"👤 **کاربر جدید ربات را استارت کرد:**\n\nنام: {user_name}\nیوزرنیم: {username}\nآیدی عددی: `{user_id}`"
         try:
-            bot.send_message(ADMIN_CHAT_ID, log_text)
+            bot.send_message(ADMIN_CHAT_ID, log_text, parse_mode="Markdown")
         except Exception as e:
             print(f"Error sending log to admin: {e}")
 
-    if user_id in user_phones:
-        welcome_text = (
-            f"سلام {user_name} عزیز! 🌟\n"
-            "به ربات خوش آمدید.\n\n"
-            "از منوی زیر بخش مورد نظر خود را انتخاب کنید:"
-        )
-        bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu_markup(user_id))
-    else:
-        welcome_text = (
-            f"سلام {user_name} عزیز! 🌟\n"
-            "به ربات فروشگاهی و مدیریت کانفیگ خوش اومدی.\n\n"
-            "👇 لطفاً برای ادامه و تایید هویت، شماره تلفن خود را از طریق دکمه‌ی زیر به اشتراک بگذارید:"
-        )
-        bot.send_message(message.chat.id, welcome_text, reply_markup=request_phone_markup())
+    welcome_text = (
+        f"سلام {user_name} عزیز 👋\n\n"
+        f"به ربات فروشگاهی **Hes_VPN** خوش آمدید!\n\n"
+        f"از منوی زیر می‌توانید مینی‌اپ را باز کنید یا از دکمه‌های سریع استفاده کنید."
+    )
+    
+    bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu_markup(user_id), parse_mode="Markdown")
 
 
+# 2. دریافت شماره تلفن
 @bot.message_handler(content_types=['contact'])
 def handle_contact(message):
     user_id = message.from_user.id
     if message.contact is not None:
         phone_number = message.contact.phone_number
         user_phones[user_id] = phone_number
-
+        
         try:
             bot.send_message(
                 ADMIN_CHAT_ID,
-                f"📞 شماره جدید دریافت شد!\n"
-                f"👤 کاربر: {message.from_user.first_name}\n"
-                f"🆔 آیدی: {user_id}\n"
-                f"📱 شماره: +{phone_number}"
+                f"📱 **شماره جدید دریافت شد:**\n👤 کاربر: {message.from_user.first_name}\nآیدی: `{user_id}`\nشماره: `{phone_number}`",
+                parse_mode="Markdown"
             )
         except Exception:
             pass
-
+            
         bot.send_message(
             message.chat.id,
-            "✅ شماره شما با موفقیت ثبت شد!\n\nاکنون می‌توانید از منوی زیر استفاده کنید:",
-            reply_markup=main_menu_markup(user_id),
+            "اکنون می‌توانید از منوی زیر استفاده کنید:",
+            reply_markup=main_menu_markup(user_id)
         )
 
 
-@bot.message_handler(commands=['send'])
-def broadcast_message(message):
-    if message.from_user.id == ADMIN_CHAT_ID:
-        text_to_send = message.text.replace("/send", "").strip()
-        if not text_to_send:
-            bot.reply_to(message, "⚠ لطفاً متن رو بعد از /send بنویس.")
-            return
+# 3. دریافت داده‌های ساختار قدیمی مینی‌اپ (جهت رزرو و سازگاری)
+@bot.message_handler(content_types=['web_app_data'])
+def handle_web_app_data(message):
+    try:
+        data = json.loads(message.web_app_data.data)
+        if data.get("action") == "buy_plan":
+            plan = data.get("plan")
+            price = data.get("price")
+            
+            response_text = (
+                f"🛒 **سفارش جدید از مینی‌اپ**\n\n"
+                f"📌 **پلن انتخابی:** {plan}\n"
+                f"💳 **مبلغ قابل پرداخت:** {price}\n\n"
+                f"💳 **شماره کارت جهت واریز:**\n"
+                f"`{CARD_NUMBER}`\n"
+                f"👤 **به نام:** {CARD_HOLDER}\n\n"
+                f"📸 لطفاً پس از واریز، **تصویر فیش واریزی** خود را همین‌جا ارسال کنید."
+            )
+            bot.send_message(message.chat.id, response_text, parse_mode="Markdown")
+    except Exception as e:
+        print(f"WebApp Error: {e}")
 
-        success_count = 0
-        for uid in users_set:
-            try:
-                bot.send_message(uid, f"📢 پیام مدیریت:\n\n{text_to_send}")
-                success_count += 1
-            except Exception as e:
-                print(f"Could not send to {uid}: {e}")
 
-        bot.reply_to(message, f"✅ پیام به {success_count} کاربر ارسال شد.")
-    else:
-        bot.reply_to(message, "❌ دسترسی ندارید.")
-
-
+# 4. دریافت فیش واریزی (عکس)
 @bot.message_handler(content_types=['photo'])
 def handle_receipt(message):
-    user = message.from_user
-
-    if user.id == ADMIN_CHAT_ID:
-        bot.reply_to(message, "ℹ این عکس از طرف شما (ادمین) ارسال شد.")
-        return
-
+    user_id = message.from_user.id
+    safe_name = message.from_user.first_name.replace("*", "").replace("_", "") if message.from_user.first_name else "کاربر"
+    safe_username = f"@{message.from_user.username}" if message.from_user.username else "ندارد"
+    phone_info = user_phones.get(user_id, "ثبت نشده")
+    
+    caption_info = (
+        f"💳 **رسید واریزی جدید دریافت شد**\n\n"
+        f"👤 **نام:** {safe_name}\n"
+        f"🆔 **یوزرنیم:** {safe_username}\n"
+        f"🔢 **آیدی عددی:** `{user_id}`\n"
+        f"📱 **شماره:** `{phone_info}`\n\n"
+        f"وضعیت رسید:"
+    )
+    
+    markup = InlineKeyboardMarkup(row_width=2)
+    markup.add(
+        InlineKeyboardButton("✅ تأیید و ارسال کانفیگ", callback_data=f"approve_{user_id}"),
+        InlineKeyboardButton("❌ رد فیش", callback_data=f"reject_{user_id}")
+    )
+    
     try:
-        phone_info = user_phones.get(user.id, "ثبت نشده")
-        safe_name = user.first_name.replace("*", "").replace("_", "") if user.first_name else "کاربر"
-        safe_username = f"@{user.username}" if user.username else "ندارد"
-
-        caption_info = (
-            f"📥 رسید واریز جدید!\n\n"
-            f"👤 نام: {safe_name}\n"
-            f"🆔 یوزرنیم: {safe_username}\n"
-            f"🔢 آیدی عددی: {user.id}\n"
-            f"📱 شماره: +{phone_info}\n\n"
-            f"👇 وضعیت این رسید:"
-        )
-
-        markup = InlineKeyboardMarkup(row_width=2)
-        markup.add(
-            InlineKeyboardButton("✅ تایید و ارسال کانفیگ", callback_data=f"approve_{user.id}"),
-            InlineKeyboardButton("❌ رد رسید", callback_data=f"reject_{user.id}"),
-        )
-
-        bot.send_photo(
-            ADMIN_CHAT_ID,
-            message.photo[-1].file_id,
-            caption=caption_info,
-            reply_markup=markup,
-        )
-        bot.reply_to(
-            message,
-            "⏳ رسید شما دریافت شد.\nلطفاً منتظر تایید مدیریت باشید. (حداکثر ۱۵ دقیقه)\nبا تشکر 🙏"
-        )
+        bot.send_photo(ADMIN_CHAT_ID, message.photo[-1].file_id, caption=caption_info, reply_markup=markup, parse_mode="Markdown")
+        bot.reply_to(message, "✅ رسید شما با موفقیت برای مدیریت ارسال شد. پس از بررسی، کانفیگ برای شما ارسال می‌شود.")
     except Exception as e:
         print(f"Photo error: {e}")
-        bot.reply_to(message, "❌ خطا در ارسال رسید. لطفاً ابتدا ربات را با اکانت ادمین استارت کنید و مجدداً بفرستید.")
+        bot.reply_to(message, "❌ خطا در ارسال رسید. لطفاً مجدداً تلاش کنید.")
 
 
+# 5. پاسخ ادمین به فیش‌ها و کلیک روی دکمه‌ها
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
-    chat_id = call.message.chat.id
+    user_id = call.message.chat.id
     message_id = call.message.message_id
-    user_id = call.from_user.id
-
+    
     if call.data.startswith("approve_") or call.data.startswith("reject_"):
         if user_id != ADMIN_CHAT_ID:
-            bot.answer_callback_query(call.id, "❌ دسترسی ندارید!", show_alert=True)
+            bot.answer_callback_query(call.id, "دسترسی ندارید!", show_alert=True)
             return
-
+            
         action, target_user_id = call.data.split("_")
         target_user_id = int(target_user_id)
-
+        
         if action == "approve":
+            success_text = "🎉 **پرداخت شما با موفقیت تأیید شد!**\n\nلطفاً چند لحظه صبر کنید..."
+            bot.send_message(target_user_id, success_text, parse_mode="Markdown")
+            
+            qr_caption = (
+                f"📌 **اشتراک اختصاصی شما**\n\n"
+                f"عکس بالا را با نرم‌افزار v2rayNG اسکن کنید یا کد زیر را کپی و وارد کنید.\n\n"
+                f"در صورت بروز مشکل با پشتیبانی در ارتباط باشید: @{SUPPORT_USERNAME}"
+            )
             try:
-                success_text = (
-                    "🎉 پرداخت شما با موفقیت تایید شد!\n\n"
-                    "🔹 کانفیگ اختصاصی شما به صورت QR Code در پیام بعدی ارسال می‌شود.\n"
-                    "لطفاً چند لحظه صبر کنید...\n\n"
-                    "⚠️ نکته مهم: این کانفیگ مخصوص شماست و به هیچ عنوان آن را در اختیار دیگران قرار ندهید.\n"
-                    "🌐 برای اتصال، از برنامه‌های موجود در منوی ربات استفاده کنید.\n\n"
-                    "از خرید شما سپاسگزاریم ❤️"
-                )
-                bot.send_message(target_user_id, success_text)
-
-                qr_caption = (
-                    "📸 QR Code کانفیگ اختصاصی شما\n\n"
-                    "🔹 روش استفاده:\n"
-                    "۱. عکس بالا را ذخیره کنید.\n"
-                    "۲. وارد برنامه اتصال (مثل v2rayNG یا NekoBox) شوید.\n"
-                    "۳. گزینه «اسکن QR Code از گالری» را انتخاب کنید.\n"
-                    "۴. عکس ذخیره شده را انتخاب کنید تا کانفیگ اضافه شود.\n\n"
-                    "⚠️️ این QR Code فقط برای شماست."
-                )
-
-                bot.send_photo(
-                    target_user_id,
-                    QR_IMAGE_PATH,
-                    caption=qr_caption
-                )
-
-                final_text = (
-                    "✅ کانفیگ شما با موفقیت ارسال شد.\n\n"
-                    "🔹 لطفاً طبق راهنمای بالا عمل کنید.\n"
-                    "🔹 در صورت بروز مشکل، از منوی ربات با پشتیبانی در ارتباط باشید.\n\n"
-                    "🌹 روز خوبی داشته باشید!"
-                )
-                bot.send_message(target_user_id, final_text)
-
-                bot.answer_callback_query(call.id, "✅ رسید تایید شد و QR Code ارسال گردید.")
-
-                new_caption = (call.message.caption or "") + "\n\n✅ وضعیت: تایید شد (QR Code ارسال گردید)."
-                bot.edit_message_caption(chat_id=chat_id, message_id=message_id, caption=new_caption)
+                bot.send_photo(target_user_id, QR_IMAGE_PATH, caption=qr_caption)
             except Exception as e:
-                print(f"Error sending QR code: {e}")
-                bot.answer_callback_query(call.id, "⚠ خطا در ارسال QR Code.", show_alert=True)
-
+                print(f"Error sending QR: {e}")
+                
+            bot.edit_message_caption("✅ رسید تأیید شد و کانفیگ ارسال گردید.", chat_id=user_id, message_id=message_id)
+            bot.answer_callback_query(call.id, "تأیید شد.")
+            
         elif action == "reject":
-            try:
-                reject_text = (
-                    "❌ متأسفانه رسید واریز شما تایید نشد.\n\n"
-                    "🔹 دلایل احتمالی:\n"
-                    "• مبلغ واریزی با پلن مطابقت ندارد.\n"
-                    "• تصویر فیش ناخوانا یا نامعتبر است.\n"
-                    "• واریز به حساب اشتباه انجام شده.\n\n"
-                    "💬 در صورت اطمینان، با پشتیبانی در ارتباط باشید:\n"
-                    f"👉 @{SUPPORT_USERNAME}"
-                )
-                bot.send_message(target_user_id, reject_text)
-                bot.answer_callback_query(call.id, "❌ رسید رد شد.")
-
-                new_caption = (call.message.caption or "") + "\n\n❌ وضعیت: رسید رد شد."
-                bot.edit_message_caption(chat_id=chat_id, message_id=message_id, caption=new_caption)
-            except Exception as e:
-                print(f"Error rejecting: {e}")
-        return
-
-    if call.data == "buy_plan":
-        text = "📦 لطفاً حجم مورد نظر خود را انتخاب کنید:"
+            reject_text = f"❌ **متأسفانه رسید واریزی شما تأیید نشد.**\n\nجهت پیگیری به پشتیبانی پیام دهید: @{SUPPORT_USERNAME}"
+            bot.send_message(target_user_id, reject_text, parse_mode="Markdown")
+            bot.edit_message_caption("❌ رسید رد شد.", chat_id=user_id, message_id=message_id)
+            bot.answer_callback_query(call.id, "رد شد.")
+            
+    elif call.data == "buy_plan":
         markup = InlineKeyboardMarkup(row_width=2)
         markup.add(
-            InlineKeyboardButton("⚡ ۱۰ گیگابایت - ۵۰ ت", callback_data="plan_10gb"),
-            InlineKeyboardButton("🔥 ۲۰ گیگابایت - ۱۰۰ ت", callback_data="plan_20gb"),
-            InlineKeyboardButton("💎 ۳۰ گیگابایت - ۱۵۰ ت", callback_data="plan_30gb"),
-            InlineKeyboardButton("👑 نامحدود ماهانه - ۳۵۰ ت", callback_data="plan_unlimited"),
-            InlineKeyboardButton("« بازگشت", callback_data="back_home"),
+            InlineKeyboardButton("⚡ ۱۰ گیگ", callback_data="plan_10gb"),
+            InlineKeyboardButton("🔥 ۲۰ گیگ", callback_data="plan_20gb"),
+            InlineKeyboardButton("💎 ۳۰ گیگ", callback_data="plan_30gb"),
+            InlineKeyboardButton("👑 نامحدود", callback_data="plan_unlimited"),
+            InlineKeyboardButton("🔙 بازگشت", callback_data="back_home")
         )
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=markup)
-
+        bot.edit_message_text("🛒 لطفاً پلن مورد نظر خود را انتخاب کنید:", chat_id=user_id, message_id=message_id, reply_markup=markup)
+        
     elif call.data.startswith("plan_"):
-        plan_details = {
-            "plan_10gb": {"name": "۱۰ گیگابایت", "price": "۵۰,۰۰۰ تومان"},
-            "plan_20gb": {"name": "۲۰ گیگابایت", "price": "۱۰۰,۰۰۰ تومان"},
-            "plan_30gb": {"name": "۳۰ گیگابایت", "price": "۱۵۰,۰۰۰ تومان"},
-            "plan_unlimited": {"name": "حجم نامحدود (ماهانه)", "price": "۳۵۰,۰۰۰ تومان"},
+        plans = {
+            "plan_10gb": ("۱۰ گیگابایت", "۵۰,۰۰۰ تومان"),
+            "plan_20gb": ("۲۰ گیگابایت", "۱۰۰,۰۰۰ تومان"),
+            "plan_30gb": ("۳۰ گیگابایت", "۱۵۰,۰۰۰ تومان"),
+            "plan_unlimited": ("نامحدود", "۳۵۰,۰۰۰ تومان")
         }
-        selected = plan_details.get(call.data, {"name": "نامشخص", "price": "۰"})
+        plan_name, plan_price = plans.get(call.data, ("نامشخص", "0"))
+        
         text = (
-            f"🛒 پلن انتخابی شما: {selected['name']}\n"
-            f"💵 مبلغ قابل پرداخت: {selected['price']}\n\n"
-            "━━━━━━━━━━━━━━━━━━━\n"
-            "💳 شماره کارت برای واریز:\n"
-            f"{CARD_NUMBER}\n"
-            f"بنام: {CARD_HOLDER}\n"
-            "━━━━━━━━━━━━━━━━━━━\n\n"
-            "📌 راهنما:\n"
-            "مبلغ را واریز کرده و عکس فیش را همینجا برای ربات بفرستید."
+            f"📌 **پلن انتخابی:** {plan_name}\n"
+            f"💳 **مبلغ:** {plan_price}\n\n"
+            f"شماره کارت جهت واریز:\n"
+            f"`{CARD_NUMBER}` ({CARD_HOLDER})\n\n"
+            f"📸 لطفاً فیش واریزی را همین‌جا بفرستید."
         )
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("« بازگشت به لیست پلن‌ها", callback_data="buy_plan"))
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=markup)
-
-    elif call.data == "referral_menu":
-        user_referrals = referral_counts.get(user_id, 0)
-        ref_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
-        text = (
-            "🎁 سیستم دعوت از دوستان (رفرال)\n\n"
-            "با دعوت از دوستانتان، جایزه بگیرید!\n"
-            "📌 قانون: با دعوت از ۱۰ نفر، یک سرور نامحدود یک ماهه رایگان بگیرید.\n\n"
-            f"👥 تعداد زیرمجموعه‌های شما: {user_referrals} / 10 نفر\n\n"
-            "🔗 لینک دعوت اختصاصی شما:\n"
-            f"{ref_link}\n\n"
-            "👇 لینک را برای دوستانتان بفرستید."
-        )
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("« بازگشت", callback_data="back_home"))
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=markup)
-
-    elif call.data == "admin_panel":
-        if user_id != ADMIN_CHAT_ID:
-            bot.answer_callback_query(call.id, "❌ دسترسی ندارید!", show_alert=True)
-            return
-        total_users = len(users_set)
-        referrers_text = ""
-        if referral_counts:
-            for ref_id, count in referral_counts.items():
-                referrers_text += f"• آیدی {ref_id}: {count} زیرمجموعه\n"
-        else:
-            referrers_text = "هنوز کسی زیرمجموعه‌ای ثبت نکرده.\n"
-        text = (
-            "⚙️ پنل مدیریت ربات\n\n"
-            f"👥 تعداد کل کاربران: {total_users} نفر\n\n"
-            "📊 آمار کاربران دارای رفرال:\n"
-            f"{referrers_text}"
-        )
-        markup = InlineKeyboardMarkup()
-        markup.add(
-            InlineKeyboardButton("🔄 بروزرسانی", callback_data="admin_panel"),
-            InlineKeyboardButton("« بازگشت", callback_data="back_home"),
-        )
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=markup)
-
-    elif call.data == "apps_menu":
-        text = "📱 برنامه‌های اتصال:\n• NekoBox\n• v2rayNG"
-        markup = InlineKeyboardMarkup()
-        markup.add(InlineKeyboardButton("« بازگشت", callback_data="back_home"))
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=markup)
-
-    elif call.data == "support":
-        text = (
-            "💬 پشتیبانی:\n\n"
-            "برای ارتباط مستقیم با پشتیبانی روی دکمه زیر بزنید:"
-        )
-        markup = InlineKeyboardMarkup(row_width=1)
-        markup.add(
-            InlineKeyboardButton("👨‍💻 ارتباط با پشتیبانی", url=f"https://t.me/{SUPPORT_USERNAME}"),
-            InlineKeyboardButton("« بازگشت", callback_data="back_home"),
-        )
-        bot.edit_message_text(text, chat_id, message_id, reply_markup=markup)
+        bot.send_message(user_id, text, parse_mode="Markdown")
+        bot.answer_callback_query(call.id)
 
     elif call.data == "back_home":
-        user_name = call.from_user.first_name.replace("*", "").replace("_", "") if call.from_user.first_name else "کاربر"
-        welcome_text = (
-            f"سلام {user_name} عزیز! 🌟\n"
-            "به ربات فروشگاهی و مدیریت کانفیگ خوش اومدی.\n\n"
-            "از دکمه‌های زیر استفاده کن:"
-        )
-        bot.edit_message_text(welcome_text, chat_id, message_id, reply_markup=main_menu_markup(user_id))
+        bot.edit_message_text("به منوی اصلی بازگشتید:", chat_id=user_id, message_id=message_id, reply_markup=main_menu_markup(user_id))
 
-
-print("🚀 Bot is running...")
-
-# پاک کردن پیام‌های معلق قدیمی
-try:
-    bot.skip_pending()
-except Exception:
-    pass
-
-# اجرا به همراه تایم‌آوت پایدار
-bot.infinity_polling(timeout=10, long_polling_timeout=5)
+# ==================== اجرای ربات ====================
+if __name__ == '__main__':
+    keep_alive()
+    print("Bot is running...")
+    bot.infinity_polling()
