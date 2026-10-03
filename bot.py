@@ -3,7 +3,7 @@ from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 import random
 
 # توکن ربات شما
-TOKEN = "8844989420:AAEASNZoEecyzvIhM14VrBoTppv-ElfzJtM"
+TOKEN = "8844989420:AAFe-UvQWXK6lv0kT_Vixb4STOTtmsTEFdw"
 
 # یوزرنیم دقیق ربات شما (بدون @)
 BOT_USERNAME = "Hesamm_vpnbot"
