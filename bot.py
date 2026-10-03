@@ -6,7 +6,8 @@ from threading import Thread
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, WebAppInfo
 
 # ==================== تنظیمات اصلی ====================
-TOKEN = "8844989420:AAHZeWMt95dadVuzoqe-VApgBmBYZJbp7Nc"
+# توکن جدید جایگزین شد
+TOKEN = "8844989420:AAGvkDwt0QX1DnP1923vdBHPvuW8iidL55w"
 BOT_USERNAME = "Hesamm_vpnbot"
 
 # اطلاعات حساب و مدیریت
@@ -65,7 +66,7 @@ def request_phone_markup():
 
 # ==================== هندلرهای دستورات ====================
 
-# 1. دستور start (آپدیت شده برای پشتیبانی کامل از مینی‌اپ جدید)
+# 1. دستور start (پشتیبانی کامل از مینی‌اپ و رفرال)
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.from_user.id
@@ -77,7 +78,7 @@ def send_welcome(message):
     
     command_args = message.text.split()
     
-    # 🔹 الف) هندل مستقیم خرید از مینی‌اپ جدید
+    # 🔹 هندل مستقیم خرید از مینی‌اپ
     if len(command_args) > 1 and command_args[1].startswith("plan_"):
         plan_key = command_args[1]
         plans = {
@@ -102,7 +103,7 @@ def send_welcome(message):
         bot.send_message(message.chat.id, response_text, parse_mode="Markdown")
         return
 
-    # 🔹 ب) سیستم زیرمجموعه‌گیری (Referral)
+    # 🔹 سیستم زیرمجموعه‌گیری (Referral)
     if len(command_args) > 1 and command_args[1].startswith("ref_"):
         try:
             referrer_id = int(command_args[1].replace("ref_", ""))
@@ -115,7 +116,7 @@ def send_welcome(message):
         except Exception as e:
             print(f"Referral error: {e}")
 
-    # 🔹 ج) گزارش ورود کاربر جدید به ادمین
+    # 🔹 گزارش ورود کاربر جدید به ادمین
     if is_new_user and user_id != ADMIN_CHAT_ID:
         log_text = f"👤 **کاربر جدید ربات را استارت کرد:**\n\nنام: {user_name}\nیوزرنیم: {username}\nآیدی عددی: `{user_id}`"
         try:
@@ -156,7 +157,7 @@ def handle_contact(message):
         )
 
 
-# 3. دریافت داده‌های ساختار قدیمی مینی‌اپ (جهت رزرو و سازگاری)
+# 3. دریافت داده‌های مینی‌اپ (پشتیبانی از ساختار قبلی)
 @bot.message_handler(content_types=['web_app_data'])
 def handle_web_app_data(message):
     try:
@@ -210,7 +211,7 @@ def handle_receipt(message):
         bot.reply_to(message, "❌ خطا در ارسال رسید. لطفاً مجدداً تلاش کنید.")
 
 
-# 5. پاسخ ادمین به فیش‌ها و کلیک روی دکمه‌ها
+# 5. پاسخ ادمین به فیش‌ها و دکمه‌های اینلاین
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     user_id = call.message.chat.id
