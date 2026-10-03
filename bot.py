@@ -100,4 +100,5 @@ def callback_listener(call):
         bot.answer_callback_query(call.id, "❌ رسید رد شد.")
         bot.edit_message_caption("❌ این رسید رد شد.", chat_id=ADMIN_ID, message_id=call.message.message_id)
 
-bot.infinity_polling(skip_pending_requests=True)
+# اجرای ربات (اصلاح شده)
+bot.infinity_polling()
